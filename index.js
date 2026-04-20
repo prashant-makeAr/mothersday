@@ -11,28 +11,25 @@ const CONFIG = {
     momName: "Sita",
     introDuration: 4,
     templateDuration: 20,
-    width: 1440,
-    height: 2848
+    width: 1080, // Optimized from 1440 for scale
+    height: 2133 // Aspect ratio preserved
 };
 
 const totalDuration = CONFIG.introDuration + CONFIG.templateDuration;
 
-console.log('--- Starting Render (Text Fix) ---');
+console.log('--- Starting Optimized Render ---');
 console.time('RenderTime');
 
 ffmpeg()
     .input(CONFIG.template) // 0:v, 0:a
     .input(CONFIG.image)    // 1:v
-    // 2:v Solid background to ensure text visibility
     .input(`color=c=0x1a0a2e:s=${CONFIG.width}x${CONFIG.height}:r=30:d=${CONFIG.introDuration}`) 
     .inputOptions(['-f lavfi'])
-    // 3:a Silent audio
     .input(`anullsrc=r=44100:cl=stereo:d=${totalDuration}`) 
     .inputOptions(['-f lavfi'])
 
     .complexFilter([
         // --- 1. STYLISH INTRO ---
-        // Scale mom image to fill background
         {
             filter: 'scale',
             inputs: '1:v',
@@ -51,21 +48,19 @@ ffmpeg()
             outputs: 'intro_bg_blurred',
             options: { luma_radius: 30, luma_power: 3 }
         },
-        // Add a dark semi-transparent overlay to make text pop
         {
             filter: 'drawbox',
             inputs: 'intro_bg_blurred',
             outputs: 'intro_bg_dimmed',
             options: { x: 0, y: 0, w: 'iw', h: 'ih', color: 'black@0.4', t: 'fill' }
         },
-        // TEXT: Increased size and added a background box for guaranteed visibility
         {
             filter: 'drawtext',
             inputs: 'intro_bg_dimmed',
             outputs: 'intro_text',
             options: {
                 text: 'Presenting the song\nfor my mom...',
-                fontsize: 120, // Much larger for 1440px width
+                fontsize: 100, // Adjusted for 1080p
                 fontcolor: 'white',
                 shadowcolor: 'black@0.8',
                 shadowx: 5,
@@ -86,6 +81,13 @@ ffmpeg()
         },
 
         // --- 2. MAIN VIDEO ---
+        // Resize template to 1080 width to match intro
+        {
+            filter: 'scale',
+            inputs: '0:v',
+            outputs: 'template_scaled',
+            options: { w: CONFIG.width, h: CONFIG.height }
+        },
         {
             filter: 'scale',
             inputs: '1:v',
@@ -100,7 +102,7 @@ ffmpeg()
         },
         {
             filter: 'overlay',
-            inputs: ['0:v', 'mom_with_border'],
+            inputs: ['template_scaled', 'mom_with_border'],
             outputs: 'main_with_mom',
             options: { x: '(W-w)/2', y: 150 }
         },
@@ -137,6 +139,8 @@ ffmpeg()
         '-map [v]',
         '-map [a]',
         '-c:v libx264',
+        '-preset ultrafast', // MAX SPEED
+        '-crf 23',
         '-c:a aac',
         '-pix_fmt yuv420p',
         '-t', totalDuration.toString()
@@ -147,6 +151,6 @@ ffmpeg()
     .on('error', err => console.error('Error:', err.message))
     .on('end', () => {
         console.timeEnd('RenderTime');
-        console.log('--- Render Complete ---');
+        console.log('--- Optimized Render Complete ---');
     })
     .save(CONFIG.output);
