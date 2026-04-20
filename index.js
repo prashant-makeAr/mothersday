@@ -9,7 +9,7 @@ const CONFIG = {
     image: path.resolve('mom.jpg'),
     output: path.resolve('test_output.mp4'),
     momName: "Sita",
-    introDuration: 3,
+    introDuration: 4,
     templateDuration: 20,
     width: 1440,
     height: 2848
@@ -17,64 +17,93 @@ const CONFIG = {
 
 const totalDuration = CONFIG.introDuration + CONFIG.templateDuration;
 
-console.log('--- Starting Render ---');
+console.log('--- Starting Render (Text Fix) ---');
 console.time('RenderTime');
 
 ffmpeg()
     .input(CONFIG.template) // 0:v, 0:a
     .input(CONFIG.image)    // 1:v
-    // Generate black background with fixed duration
-    .input(`color=c=black:s=${CONFIG.width}x${CONFIG.height}:r=30:d=${totalDuration}`) // 2:v
+    // 2:v Solid background to ensure text visibility
+    .input(`color=c=0x1a0a2e:s=${CONFIG.width}x${CONFIG.height}:r=30:d=${CONFIG.introDuration}`) 
     .inputOptions(['-f lavfi'])
-    // Silent audio with fixed duration
-    .input(`anullsrc=r=44100:cl=stereo:d=${totalDuration}`) // 3:a
+    // 3:a Silent audio
+    .input(`anullsrc=r=44100:cl=stereo:d=${totalDuration}`) 
     .inputOptions(['-f lavfi'])
 
     .complexFilter([
-        // 1. Prepare Intro Video: Black background + Text + Fade Out
+        // --- 1. STYLISH INTRO ---
+        // Scale mom image to fill background
+        {
+            filter: 'scale',
+            inputs: '1:v',
+            outputs: 'intro_bg_scaled',
+            options: { w: CONFIG.width, h: CONFIG.height, force_original_aspect_ratio: 'increase' }
+        },
+        {
+            filter: 'crop',
+            inputs: 'intro_bg_scaled',
+            outputs: 'intro_bg_cropped',
+            options: { w: CONFIG.width, h: CONFIG.height }
+        },
+        {
+            filter: 'boxblur',
+            inputs: 'intro_bg_cropped',
+            outputs: 'intro_bg_blurred',
+            options: { luma_radius: 30, luma_power: 3 }
+        },
+        // Add a dark semi-transparent overlay to make text pop
+        {
+            filter: 'drawbox',
+            inputs: 'intro_bg_blurred',
+            outputs: 'intro_bg_dimmed',
+            options: { x: 0, y: 0, w: 'iw', h: 'ih', color: 'black@0.4', t: 'fill' }
+        },
+        // TEXT: Increased size and added a background box for guaranteed visibility
         {
             filter: 'drawtext',
-            inputs: '2:v',
+            inputs: 'intro_bg_dimmed',
             outputs: 'intro_text',
             options: {
-                text: 'Presenting the song for my mom...',
-                fontsize: 80,
+                text: 'Presenting the song\nfor my mom...',
+                fontsize: 120, // Much larger for 1440px width
                 fontcolor: 'white',
+                shadowcolor: 'black@0.8',
+                shadowx: 5,
+                shadowy: 5,
                 x: '(w-text_w)/2',
                 y: '(h-text_h)/2',
+                line_spacing: 30,
+                box: 1,
+                boxcolor: 'black@0.3',
+                boxborderw: 40
             }
         },
         {
             filter: 'fade',
             inputs: 'intro_text',
             outputs: 'intro_final',
-            options: {
-                type: 'out',
-                st: CONFIG.introDuration - 0.5,
-                d: 0.5
-            }
+            options: { type: 'out', st: CONFIG.introDuration - 0.5, d: 0.5 }
         },
 
-        // 2. Prepare Main Video: Scale image and overlay on template
+        // --- 2. MAIN VIDEO ---
         {
             filter: 'scale',
             inputs: '1:v',
             outputs: 'scaled_mom',
-            options: {
-                w: CONFIG.width * 0.8,
-                h: -1 // Maintain aspect ratio
-            }
+            options: { w: CONFIG.width * 0.7, h: -1 }
+        },
+        {
+            filter: 'pad',
+            inputs: 'scaled_mom',
+            outputs: 'mom_with_border',
+            options: { w: 'iw+20', h: 'ih+20', x: 10, y: 10, color: 'white@0.9' }
         },
         {
             filter: 'overlay',
-            inputs: ['0:v', 'scaled_mom'],
+            inputs: ['0:v', 'mom_with_border'],
             outputs: 'main_with_mom',
-            options: {
-                x: '(W-w)/2',
-                y: 100 // Top portion
-            }
+            options: { x: '(W-w)/2', y: 150 }
         },
-        // Delay main video by introDuration
         {
             filter: 'setpts',
             inputs: 'main_with_mom',
@@ -82,18 +111,15 @@ ffmpeg()
             options: `PTS+${CONFIG.introDuration}/TB`
         },
 
-        // 3. Combine Intro and Main Video
-        // Use overlay with the intro_final (capped) as the base
+        // --- 3. MERGE ---
         {
             filter: 'overlay',
             inputs: ['intro_final', 'main_delayed'],
             outputs: 'v',
-            options: {
-                enable: `gte(t,${CONFIG.introDuration})`
-            }
+            options: { enable: `gte(t,${CONFIG.introDuration})` }
         },
 
-        // 4. Prepare Audio: Silent intro + Delayed main audio
+        // --- 4. AUDIO ---
         {
             filter: 'adelay',
             inputs: '0:a',
@@ -104,10 +130,7 @@ ffmpeg()
             filter: 'amix',
             inputs: ['3:a', 'main_a_delayed'],
             outputs: 'a',
-            options: {
-                inputs: 2,
-                duration: 'first' // End when the first input (anullsrc with duration) ends
-            }
+            options: { inputs: 2, duration: 'first' }
         }
     ])
     .outputOptions([
@@ -116,17 +139,12 @@ ffmpeg()
         '-c:v libx264',
         '-c:a aac',
         '-pix_fmt yuv420p',
-        '-t', totalDuration.toString() // Safety cap
+        '-t', totalDuration.toString()
     ])
-    .on('start', cmd => console.log('\nFFmpeg Command:\n', cmd))
-    .on('progress', progress => {
-        if (progress.percent) {
-            console.log(`Processing: ${Math.floor(progress.percent)}% done`);
-        }
+    .on('progress', p => {
+        if (p.percent) console.log(`Progress: ${Math.floor(p.percent)}%`);
     })
-    .on('error', err => {
-        console.error('Error:', err.message);
-    })
+    .on('error', err => console.error('Error:', err.message))
     .on('end', () => {
         console.timeEnd('RenderTime');
         console.log('--- Render Complete ---');
