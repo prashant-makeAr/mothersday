@@ -55,12 +55,11 @@ app.post('/generate', upload.single('momImage'), (req, res) => {
 
     const totalDuration = CONFIG.introDuration + CONFIG.templateDuration;
 
-    // Fixed Area Dimensions
-    const maxOverlayWidth = Math.floor(CONFIG.width * 0.95); // 1026
-    const maxOverlayHeight = Math.floor(CONFIG.height * 0.40); // 853
+    const maxOverlayWidth = Math.floor(CONFIG.width * 0.95);
+    const maxOverlayHeight = Math.floor(CONFIG.height * 0.40);
     const borderPadding = 20;
 
-    console.log(`Generating video for message: "${userMessage}"`);
+    console.log(`Generating video (Render-Fix) for: "${userMessage}"`);
 
     const drawtextOptions = {
         text: userMessage,
@@ -82,14 +81,13 @@ app.post('/generate', upload.single('momImage'), (req, res) => {
     }
 
     ffmpeg()
-        .input(CONFIG.template)
-        .input(userImage)
-        .input(`color=c=0x1a0a2e:s=${CONFIG.width}x${CONFIG.height}:r=30:d=${CONFIG.introDuration}`)
-        .inputOptions(['-f lavfi'])
-        .input(`anullsrc=r=44100:cl=stereo:d=${totalDuration}`)
-        .inputOptions(['-f lavfi'])
+        .input(CONFIG.template) // 0:v, 0:a
+        .input(userImage)       // 1:v
         .complexFilter([
-            // 1. STYLISH INTRO
+            // Generate Silence Source internally (avoids -f lavfi input error on Render)
+            `anullsrc=r=44100:cl=stereo:d=${totalDuration}[silent_audio]`,
+
+            // 1. STYLISH INTRO (Uses blurred user image as background)
             {
                 filter: 'scale',
                 inputs: '1:v',
@@ -126,6 +124,7 @@ app.post('/generate', upload.single('momImage'), (req, res) => {
                 outputs: 'intro_final',
                 options: { type: 'out', st: CONFIG.introDuration - 0.5, d: 0.5 }
             },
+
             // 2. MAIN VIDEO
             {
                 filter: 'scale',
@@ -133,7 +132,6 @@ app.post('/generate', upload.single('momImage'), (req, res) => {
                 outputs: 'template_scaled',
                 options: { w: CONFIG.width, h: CONFIG.height }
             },
-            // SCALE IMAGE TO FIT 95% Width and 40% Height
             {
                 filter: 'scale',
                 inputs: '1:v',
@@ -156,7 +154,7 @@ app.post('/generate', upload.single('momImage'), (req, res) => {
                 outputs: 'main_with_mom',
                 options: { 
                     x: '(W-w)/2', 
-                    y: `(${maxOverlayHeight}-h)/2 + 50` // Centered in the top 40% zone with a small offset
+                    y: `(${maxOverlayHeight}-h)/2 + 50` 
                 }
             },
             {
@@ -165,6 +163,7 @@ app.post('/generate', upload.single('momImage'), (req, res) => {
                 outputs: 'main_delayed',
                 options: `PTS+${CONFIG.introDuration}/TB`
             },
+
             // 3. MERGE
             {
                 filter: 'overlay',
@@ -172,7 +171,8 @@ app.post('/generate', upload.single('momImage'), (req, res) => {
                 outputs: 'v',
                 options: { enable: `gte(t,${CONFIG.introDuration})` }
             },
-            // 4. AUDIO
+
+            // 4. AUDIO (Combine generated silence with template audio)
             {
                 filter: 'adelay',
                 inputs: '0:a',
@@ -181,7 +181,7 @@ app.post('/generate', upload.single('momImage'), (req, res) => {
             },
             {
                 filter: 'amix',
-                inputs: ['3:a', 'main_a_delayed'],
+                inputs: ['silent_audio', 'main_a_delayed'],
                 outputs: 'a',
                 options: { inputs: 2, duration: 'first' }
             }
@@ -198,8 +198,8 @@ app.post('/generate', upload.single('momImage'), (req, res) => {
         ])
         .on('end', () => {
             res.download(outputPath, (err) => {
-                fs.unlinkSync(userImage);
-                fs.unlinkSync(outputPath);
+                if (fs.existsSync(userImage)) fs.unlinkSync(userImage);
+                if (fs.existsSync(outputPath)) fs.unlinkSync(outputPath);
             });
         })
         .on('error', (err) => {
@@ -210,7 +210,7 @@ app.post('/generate', upload.single('momImage'), (req, res) => {
         .save(outputPath);
 });
 
-const PORT = 3000;
+const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
-    console.log(`Server running at http://localhost:${PORT}`);
+    console.log(`Server running at port ${PORT}`);
 });
