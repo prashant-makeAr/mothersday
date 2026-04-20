@@ -19,7 +19,7 @@ if (!fs.existsSync('temp_output')) fs.mkdirSync('temp_output');
 const CONFIG = {
     template: path.resolve('template.mp4'),
     width: 1080,
-    height: 2133,
+    height: 1920, // Standard 1080p Portrait
     introDuration: 4,
     templateDuration: 20
 };
@@ -34,40 +34,44 @@ app.post('/generate', upload.single('momImage'), (req, res) => {
     const outputPath = path.join(__dirname, 'temp_output', outputFileName);
     const totalDuration = CONFIG.introDuration + CONFIG.templateDuration;
 
-    console.log("Generating video (Ultra-Compatible Mode)");
+    console.log("Generating video (Concat Mode for Render)");
 
     ffmpeg()
         .input(CONFIG.template) // 0:v, 0:a
         .input(userImage)       // 1:v
         .complexFilter([
-            // 1. INTRO: Use color source directly in filter complex
-            `color=s=${CONFIG.width}x${CONFIG.height}:c=0x1a0a2e:d=${CONFIG.introDuration}[intro_bg]`,
-            
-            // Scale and center user image on the intro background
+            // 1. Prepare Intro Segment
+            `color=s=${CONFIG.width}x${CONFIG.height}:c=0x1a0a2e:d=${CONFIG.introDuration}:r=30[intro_bg]`,
             {
                 filter: 'scale',
                 inputs: '1:v',
                 outputs: 'intro_img_scaled',
-                options: { w: CONFIG.width * 0.8, h: -1 }
+                options: { w: Math.floor(CONFIG.width * 0.8), h: -1 }
             },
             {
                 filter: 'overlay',
                 inputs: ['intro_bg', 'intro_img_scaled'],
-                outputs: 'intro_final',
+                outputs: 'v_intro',
                 options: { x: '(W-w)/2', y: '(H-h)/2' }
             },
 
-            // 2. MAIN VIDEO
+            // 2. Prepare Main Segment
             {
                 filter: 'scale',
                 inputs: '0:v',
-                outputs: 'template_scaled',
+                outputs: 'main_template_scaled',
                 options: { w: CONFIG.width, h: CONFIG.height }
+            },
+            {
+                filter: 'fps',
+                inputs: 'main_template_scaled',
+                outputs: 'main_template_fps',
+                options: { fps: 30 }
             },
             {
                 filter: 'scale',
                 inputs: '1:v',
-                outputs: 'scaled_mom_fit',
+                outputs: 'main_mom_scaled',
                 options: { 
                     w: Math.floor(CONFIG.width * 0.9), 
                     h: Math.floor(CONFIG.height * 0.35), 
@@ -76,27 +80,20 @@ app.post('/generate', upload.single('momImage'), (req, res) => {
             },
             {
                 filter: 'overlay',
-                inputs: ['template_scaled', 'scaled_mom_fit'],
-                outputs: 'main_with_mom',
+                inputs: ['main_template_fps', 'main_mom_scaled'],
+                outputs: 'v_main',
                 options: { x: '(W-w)/2', y: 150 }
             },
-            {
-                filter: 'setpts',
-                inputs: 'main_with_mom',
-                outputs: 'main_delayed',
-                options: `PTS+${CONFIG.introDuration}/TB`
-            },
 
-            // 3. MERGE VIDEO
+            // 3. Concat Video
             {
-                filter: 'overlay',
-                inputs: ['intro_final', 'main_delayed'],
+                filter: 'concat',
+                inputs: ['v_intro', 'v_main'],
                 outputs: 'v',
-                options: { enable: `gte(t,${CONFIG.introDuration})` }
+                options: { n: 2, v: 1, a: 0 }
             },
 
-            // 4. AUDIO: Delay template audio
-            // Note: If 'adelay' fails, we might need a different approach, but it's very standard.
+            // 4. Audio: Delay template audio by 4s
             {
                 filter: 'adelay',
                 inputs: '0:a',
@@ -109,7 +106,7 @@ app.post('/generate', upload.single('momImage'), (req, res) => {
             '-map [a]',
             '-c:v libx264',
             '-preset ultrafast',
-            '-crf 23',
+            '-crf 28', // Slightly lower quality for much faster encoding on Render
             '-c:a aac',
             '-pix_fmt yuv420p',
             '-t', totalDuration.toString()
