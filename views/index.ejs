@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Video Gift for Mom</title>
+    <style>
+        body { font-family: -apple-system, sans-serif; display: flex; flex-direction: column; align-items: center; padding: 20px; background: #f0f2f5; }
+        .card { background: white; padding: 2rem; border-radius: 15px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); width: 100%; max-width: 400px; }
+        h1 { color: #d63384; text-align: center; }
+        input, textarea, button { width: 100%; margin: 10px 0; padding: 12px; border: 1px solid #ddd; border-radius: 8px; box-sizing: border-box; }
+        button { background: #d63384; color: white; border: none; cursor: pointer; font-weight: bold; }
+        button:disabled { background: #ccc; }
+        #status { margin-top: 20px; font-weight: bold; color: #555; }
+        #result { display: none; margin-top: 20px; width: 100%; text-align: center; }
+        video { width: 100%; border-radius: 10px; }
+    </style>
+</head>
+<body>
+    <div class="card">
+        <h1>Mom's Special Song</h1>
+        <form id="uploadForm">
+            <label>Select Mom's Photo:</label>
+            <input type="file" name="momImage" accept="image/*" required>
+            
+            <label>Your Message:</label>
+            <textarea name="message" rows="3" required placeholder="Presenting the song for my mom..."></textarea>
+            
+            <button type="submit" id="submitBtn">Generate Video</button>
+        </form>
+
+        <div id="status"></div>
+
+        <div id="result">
+            <h3>Your Video is Ready!</h3>
+            <video id="videoPlayer" controls></video>
+            <button onclick="downloadVideo()">Download Video</button>
+            <button onclick="shareToWhatsApp()" style="background: #25D366;">Share to WhatsApp</button>
+        </div>
+    </div>
+
+    <script>
+        let videoBlobUrl = null;
+        let videoFile = null;
+
+        document.getElementById('uploadForm').onsubmit = async (e) => {
+            e.preventDefault();
+            const btn = document.getElementById('submitBtn');
+            const status = document.getElementById('status');
+            const result = document.getElementById('result');
+            
+            btn.disabled = true;
+            status.innerText = "Generating your video... Please wait (~10 seconds)";
+            result.style.display = "none";
+
+            const formData = new FormData(e.target);
+            try {
+                const response = await fetch('/generate', { method: 'POST', body: formData });
+                if (!response.ok) throw new Error('Generation failed');
+
+                const blob = await response.blob();
+                videoFile = new File([blob], "for_mom.mp4", { type: "video/mp4" });
+                videoBlobUrl = URL.createObjectURL(blob);
+                
+                document.getElementById('videoPlayer').src = videoBlobUrl;
+                status.innerText = "Done!";
+                result.style.display = "block";
+            } catch (err) {
+                alert(err.message);
+                status.innerText = "";
+            } finally {
+                btn.disabled = false;
+            }
+        };
+
+        function downloadVideo() {
+            const a = document.createElement('a');
+            a.href = videoBlobUrl;
+            a.download = 'gift_for_mom.mp4';
+            a.click();
+        }
+
+        async function shareToWhatsApp() {
+            if (navigator.share && videoFile) {
+                try {
+                    await navigator.share({
+                        files: [videoFile],
+                        title: 'A Song for Mom',
+                        text: 'Look what I made for Mom!'
+                    });
+                } catch (err) {
+                    console.log('Error sharing:', err);
+                }
+            } else {
+                alert("Web Share not supported on this browser. Please download and share manually.");
+            }
+        }
+    </script>
+</body>
+</html>
