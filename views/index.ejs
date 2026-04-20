@@ -3,39 +3,142 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Video Gift for Mom</title>
+    <title>Video Gift for Mom | makeAr.ai</title>
     <style>
-        body { font-family: -apple-system, sans-serif; display: flex; flex-direction: column; align-items: center; padding: 20px; background: #f0f2f5; }
-        .card { background: white; padding: 2rem; border-radius: 15px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); width: 100%; max-width: 400px; }
-        h1 { color: #d63384; text-align: center; }
-        input, textarea, button { width: 100%; margin: 10px 0; padding: 12px; border: 1px solid #ddd; border-radius: 8px; box-sizing: border-box; }
-        button { background: #d63384; color: white; border: none; cursor: pointer; font-weight: bold; }
-        button:disabled { background: #ccc; }
-        #status { margin-top: 20px; font-weight: bold; color: #555; }
-        #result { display: none; margin-top: 20px; width: 100%; text-align: center; }
-        video { width: 100%; border-radius: 10px; }
+        :root {
+            --primary: #4f46e5;
+            --primary-dark: #3730a3;
+            --secondary: #64748b;
+            --success: #10b981;
+            --bg: #f8fafc;
+        }
+
+        body { 
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif; 
+            display: flex; 
+            justify-content: center; 
+            align-items: center; 
+            min-height: 100vh;
+            margin: 0;
+            background: var(--bg);
+            color: #1e293b;
+        }
+
+        .container {
+            background: white;
+            padding: 2.5rem;
+            border-radius: 20px;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.05);
+            width: 90%;
+            max-width: 450px;
+            text-align: center;
+            transition: all 0.3s ease;
+        }
+
+        h1 { color: var(--primary); margin-bottom: 0.5rem; font-size: 1.8rem; }
+        p { color: var(--secondary); margin-bottom: 2rem; font-size: 0.9rem; }
+
+        /* Form Styles */
+        .form-group { text-align: left; margin-bottom: 1.5rem; }
+        label { display: block; margin-bottom: 0.5rem; font-weight: 600; color: #444; font-size: 0.85rem; }
+        input[type="file"], textarea {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #eee;
+            border-radius: 10px;
+            box-sizing: border-box;
+            font-size: 1rem;
+            transition: border-color 0.2s;
+        }
+        textarea:focus { border-color: var(--primary); outline: none; }
+
+        button {
+            width: 100%;
+            padding: 14px;
+            border: none;
+            border-radius: 12px;
+            font-size: 1rem;
+            font-weight: bold;
+            cursor: pointer;
+            transition: transform 0.1s, background 0.2s;
+            margin-bottom: 10px;
+        }
+        .btn-primary { background: var(--primary); color: white; }
+        .btn-primary:hover { background: var(--primary-dark); }
+        .btn-whatsapp { background: var(--success); color: white; }
+        .btn-outline { background: white; color: var(--secondary); border: 2px solid #eee; }
+        button:active { transform: scale(0.98); }
+        button:disabled { background: #ccc; cursor: not-allowed; }
+
+        /* Screen States */
+        .screen { display: none; }
+        .screen.active { display: block; animation: fadeIn 0.4s ease; }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        /* Loading Spinner */
+        .loader {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid var(--primary);
+            border-radius: 50%;
+            width: 50px;
+            height: 50px;
+            animation: spin 1s linear infinite;
+            margin: 2rem auto;
+        }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+
+        /* Result Styles */
+        video { width: 100%; border-radius: 15px; margin-bottom: 1.5rem; background: #000; box-shadow: 0 5px 15px rgba(0,0,0,0.1); }
+        
+        .error-msg { color: #dc3545; margin-bottom: 1rem; font-weight: bold; }
     </style>
 </head>
 <body>
-    <div class="card">
-        <h1>Mom's Special Song</h1>
-        <form id="uploadForm">
-            <label>Select Mom's Photo:</label>
-            <input type="file" name="momImage" accept="image/*" required>
-            
-            <label>Your Message:</label>
-            <textarea name="message" rows="3" required placeholder="Presenting the song for my mom..."></textarea>
-            
-            <button type="submit" id="submitBtn">Generate Video</button>
-        </form>
 
-        <div id="status"></div>
+    <div class="container">
+        <!-- SCREEN 1: FORM -->
+        <div id="screen-form" class="screen active">
+            <h1>Special Gift for Mom</h1>
+            <p>Create a beautiful video message in seconds</p>
+            <form id="uploadForm">
+                <div class="form-group">
+                    <label>Upload her photo</label>
+                    <input type="file" name="momImage" accept="image/*" required>
+                </div>
+                <div class="form-group">
+                    <label>Your message</label>
+                    <textarea name="message" rows="3" required placeholder="For you mom..."></textarea>
+                </div>
+                <button type="submit" class="btn-primary">Generate Magic Video</button>
+            </form>
+        </div>
 
-        <div id="result">
-            <h3>Your Video is Ready!</h3>
+        <!-- SCREEN 2: LOADING -->
+        <div id="screen-loading" class="screen">
+            <div class="loader"></div>
+            <h2>Creating Magic...</h2>
+            <p>Your special video is being rendered. This usually takes about 10 seconds.</p>
+        </div>
+
+        <!-- SCREEN 3: SUCCESS -->
+        <div id="screen-success" class="screen">
+            <h2 style="color: var(--success)">It's Ready! ✨</h2>
+            <p>Watch, download and share your special gift.</p>
             <video id="videoPlayer" controls></video>
-            <button onclick="downloadVideo()">Download Video</button>
-            <button onclick="shareToWhatsApp()" style="background: #25D366;">Share to WhatsApp</button>
+            <button onclick="shareToWhatsApp()" class="btn-whatsapp">Share to WhatsApp</button>
+            <button onclick="downloadVideo()" class="btn-outline">Download Video</button>
+            <button onclick="showForm()" class="btn-outline" style="border:none; margin-top:10px; font-size:0.8rem;">Create Another One</button>
+        </div>
+
+        <!-- SCREEN 4: ERROR -->
+        <div id="screen-error" class="screen">
+            <h2 style="color: #dc3545">Oops!</h2>
+            <p class="error-msg" id="errorMessage">Something went wrong while generating the video.</p>
+            <button onclick="showForm()" class="btn-primary">Try Again</button>
         </div>
     </div>
 
@@ -43,15 +146,18 @@
         let videoBlobUrl = null;
         let videoFile = null;
 
+        function setActiveScreen(screenId) {
+            document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+            document.getElementById(screenId).classList.add('active');
+        }
+
+        function showForm() {
+            setActiveScreen('screen-form');
+        }
+
         document.getElementById('uploadForm').onsubmit = async (e) => {
             e.preventDefault();
-            const btn = document.getElementById('submitBtn');
-            const status = document.getElementById('status');
-            const result = document.getElementById('result');
-            
-            btn.disabled = true;
-            status.innerText = "Generating your video... Please wait (~10 seconds)";
-            result.style.display = "none";
+            setActiveScreen('screen-loading');
 
             const formData = new FormData(e.target);
             try {
@@ -59,17 +165,14 @@
                 if (!response.ok) throw new Error('Generation failed');
 
                 const blob = await response.blob();
-                videoFile = new File([blob], "for_mom.mp4", { type: "video/mp4" });
+                videoFile = new File([blob], "gift_for_mom.mp4", { type: "video/mp4" });
                 videoBlobUrl = URL.createObjectURL(blob);
                 
                 document.getElementById('videoPlayer').src = videoBlobUrl;
-                status.innerText = "Done!";
-                result.style.display = "block";
+                setActiveScreen('screen-success');
             } catch (err) {
-                alert(err.message);
-                status.innerText = "";
-            } finally {
-                btn.disabled = false;
+                document.getElementById('errorMessage').innerText = err.message;
+                setActiveScreen('screen-error');
             }
         };
 
@@ -86,13 +189,13 @@
                     await navigator.share({
                         files: [videoFile],
                         title: 'A Song for Mom',
-                        text: 'Look what I made for Mom!'
+                        text: 'I made this special video for Mom! ❤️'
                     });
                 } catch (err) {
                     console.log('Error sharing:', err);
                 }
             } else {
-                alert("Web Share not supported on this browser. Please download and share manually.");
+                alert("Sharing is not supported on this browser. Please download the video and share manually.");
             }
         }
     </script>

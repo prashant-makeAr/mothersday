@@ -23,13 +23,9 @@ const CONFIG = {
     height: 2133,
     introDuration: 4,
     templateDuration: 20,
-    // UPDATE THIS: Put your font file (e.g., 'myfont.ttf') in the root folder
     fontPath: fs.existsSync('font.ttf') ? path.resolve('font.ttf') : null 
 };
 
-/**
- * Simple word wrap function to ensure text doesn't overflow width
- */
 function wrapText(text, maxCharsPerLine) {
     const words = text.split(' ');
     let lines = [];
@@ -53,14 +49,18 @@ app.get('/', (req, res) => {
 
 app.post('/generate', upload.single('momImage'), (req, res) => {
     const userImage = req.file.path;
-    // Wrap the message at ~20 characters to fit well in 1080p width
     const userMessage = wrapText(req.body.message || "Presenting the song for my mom...", 20);
     const outputFileName = `video_${Date.now()}.mp4`;
     const outputPath = path.join(__dirname, 'temp_output', outputFileName);
 
     const totalDuration = CONFIG.introDuration + CONFIG.templateDuration;
 
-    console.log(`Generating video with wrapped message:\n${userMessage}`);
+    // Fixed Area Dimensions
+    const maxOverlayWidth = Math.floor(CONFIG.width * 0.95); // 1026
+    const maxOverlayHeight = Math.floor(CONFIG.height * 0.40); // 853
+    const borderPadding = 20;
+
+    console.log(`Generating video for message: "${userMessage}"`);
 
     const drawtextOptions = {
         text: userMessage,
@@ -77,7 +77,6 @@ app.post('/generate', upload.single('momImage'), (req, res) => {
         line_spacing: 20
     };
 
-    // Use custom font if it exists
     if (CONFIG.fontPath) {
         drawtextOptions.fontfile = CONFIG.fontPath;
     }
@@ -134,15 +133,20 @@ app.post('/generate', upload.single('momImage'), (req, res) => {
                 outputs: 'template_scaled',
                 options: { w: CONFIG.width, h: CONFIG.height }
             },
+            // SCALE IMAGE TO FIT 95% Width and 40% Height
             {
                 filter: 'scale',
                 inputs: '1:v',
-                outputs: 'scaled_mom',
-                options: { w: CONFIG.width * 0.7, h: -1 }
+                outputs: 'scaled_mom_fit',
+                options: { 
+                    w: maxOverlayWidth - borderPadding, 
+                    h: maxOverlayHeight - borderPadding, 
+                    force_original_aspect_ratio: 'decrease' 
+                }
             },
             {
                 filter: 'pad',
-                inputs: 'scaled_mom',
+                inputs: 'scaled_mom_fit',
                 outputs: 'mom_with_border',
                 options: { w: 'iw+20', h: 'ih+20', x: 10, y: 10, color: 'white@0.9' }
             },
@@ -150,7 +154,10 @@ app.post('/generate', upload.single('momImage'), (req, res) => {
                 filter: 'overlay',
                 inputs: ['template_scaled', 'mom_with_border'],
                 outputs: 'main_with_mom',
-                options: { x: '(W-w)/2', y: 150 }
+                options: { 
+                    x: '(W-w)/2', 
+                    y: `(${maxOverlayHeight}-h)/2 + 50` // Centered in the top 40% zone with a small offset
+                }
             },
             {
                 filter: 'setpts',
