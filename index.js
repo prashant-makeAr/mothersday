@@ -59,7 +59,7 @@ app.post('/generate', upload.single('momImage'), (req, res) => {
     const maxOverlayHeight = Math.floor(CONFIG.height * 0.40);
     const borderPadding = 20;
 
-    console.log(`Generating video (Render-Fix) for: "${userMessage}"`);
+    console.log(`Generating video (Ultra-Compatible Fix) for: "${userMessage}"`);
 
     const drawtextOptions = {
         text: userMessage,
@@ -84,9 +84,6 @@ app.post('/generate', upload.single('momImage'), (req, res) => {
         .input(CONFIG.template) // 0:v, 0:a
         .input(userImage)       // 1:v
         .complexFilter([
-            // Generate Silence Source internally (avoids -f lavfi input error on Render)
-            `anullsrc=r=44100:cl=stereo:d=${totalDuration}[silent_audio]`,
-
             // 1. STYLISH INTRO (Uses blurred user image as background)
             {
                 filter: 'scale',
@@ -164,7 +161,7 @@ app.post('/generate', upload.single('momImage'), (req, res) => {
                 options: `PTS+${CONFIG.introDuration}/TB`
             },
 
-            // 3. MERGE
+            // 3. MERGE VIDEO
             {
                 filter: 'overlay',
                 inputs: ['intro_final', 'main_delayed'],
@@ -172,18 +169,12 @@ app.post('/generate', upload.single('momImage'), (req, res) => {
                 options: { enable: `gte(t,${CONFIG.introDuration})` }
             },
 
-            // 4. AUDIO (Combine generated silence with template audio)
+            // 4. AUDIO (Simply delay the template audio - first 4s will be silent automatically)
             {
                 filter: 'adelay',
                 inputs: '0:a',
-                outputs: 'main_a_delayed',
-                options: `${CONFIG.introDuration * 1000}|${CONFIG.introDuration * 1000}`
-            },
-            {
-                filter: 'amix',
-                inputs: ['silent_audio', 'main_a_delayed'],
                 outputs: 'a',
-                options: { inputs: 2, duration: 'first' }
+                options: `${CONFIG.introDuration * 1000}|${CONFIG.introDuration * 1000}`
             }
         ])
         .outputOptions([
